@@ -51,9 +51,20 @@ def square_multiply(x, m, n):
 
 def generate_prime(length):
     while True:
-        z = random.randint(2**(length-1), 2**length-1)
-        if is_prime(z):
-            return z
+        list_of_primes = [1, 7, 11, 13, 17, 19, 23, 29]
+        z = random.randint(2 ** (length - 6), 2 ** (length - 5) - 1)
+        p = 30 * z
+        is_prime = False
+        i = 0
+        for i in range(200):
+            for j in list_of_primes:
+                n = p + j + i * 30
+                for k in range(50):
+                    is_prime = miller_rabin(n)
+                    if not is_prime:
+                        break
+                if is_prime and n.bit_length() == length:
+                    return n
 
 
 def is_prime(number):
@@ -63,12 +74,12 @@ def is_prime(number):
     return True
 
 
-def generate_pg():
+def generate_pg(l, n):
     print("generating values")
     while True:
-        q = generate_prime(160)
+        q = generate_prime(l)
         for i in range(50):
-            k = random.randint((2**(1024-1))//q, (2**1024 - 1)//q)
+            k = random.randint((2**(n-1))//q, (2**n - 1)//q)
             p = q * k + 1
             if is_prime(p):
                 while True:
@@ -81,41 +92,41 @@ def generate_pg():
 def generate_key(g, q, p):
     print("generating key")
     x = random.randint(2, q - 1)
-    return x, square_multiply(g, x, p)
+    y = square_multiply(g, x, p)
+    return x, y
 
 
-def sign(p, q, g, x, m):
+def sign(p, q, g, x, m, hash_function):
     print("signing message")
-    hash_m = int(hashlib.sha3_256(m).hexdigest(), 16)
+    hash_m = int(hash_function(m).hexdigest(), 16)
     while True:
         while True:
             j = random.randint(2, q - 1)
             r = square_multiply(g, j, p) % q
             if r != 0:
                 break
-        f, i, h = euclidean_algorithm(q, j)
-        s = ((i % q) * (hash_m + r * x)) % q
+        inv_j = (euclidean_algorithm(j, q)[1] % q)
+        s = (inv_j * (hash_m + r * x)) % q
         if s != 0:
             return r, s
 
 
-def verify(p, q, g, y, r, s, m):
+def verify(p, q, g, y, r, s, m, hash_function):
     print("verifying message")
-    hash_m = int(hashlib.sha3_256(m).hexdigest(), 16)
-    if not 1 < r < q or not 0 < s < q:
+    hash_m = int(hash_function(m).hexdigest(), 16)
+    if not (1 < r < q and 0 < s < q):
         print("error")
         return False
-    f, i, h = euclidean_algorithm(q, s)
-    w = i % q
+    w = euclidean_algorithm(s, q)[1] % q
     u_1 = hash_m * w % q
     u_2 = r * w % q
-    v = square_multiply(g, u_1, p) * square_multiply(y, u_2, p) % q
+    v = (square_multiply(g, u_1, p) * square_multiply(y, u_2, p) % p) % q
     return v == r
 
 
 if __name__ == '__main__':
     m = "".encode()
-    p, q, g = generate_pg()
+    p, q, g = generate_pg(160, 1024)
     x, y = generate_key(g, q, p)
-    r, s = sign(p, q, g, x, m)
-    print(verify(p, q, g, y, r, s, m))
+    r, s = sign(p, q, g, x, m, hashlib.sha1)
+    print(verify(p, q, g, y, r, s, m, hashlib.sha1))
